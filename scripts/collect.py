@@ -284,6 +284,36 @@ def _add_bar_chart(svc, ss_id, sid,
 
 
 # ══════════════════════════════════════════════════════
+# サマリー（日次混雑記録）
+# ══════════════════════════════════════════════════════
+SUMMARY_SHEET   = "サマリー"
+SUMMARY_HEADERS = [
+    "日時(JST)",
+    "TDL平均待ち(分)", "TDL推定入場者数", "TDL運営中",
+    "TDS平均待ち(分)", "TDS推定入場者数", "TDS運営中",
+]
+
+def write_summary(ss, svc, now_jst, summaries: dict):
+    ws = get_or_create_sheet(ss, SUMMARY_SHEET, rows=5000, cols=8)
+    first = ws.row_values(1)
+    if first != SUMMARY_HEADERS:
+        ws.update("A1:G1", [SUMMARY_HEADERS])
+        _fmt(svc, ss.id, ws.id, 0, 0, 1, 7,
+             bg=COLOR_DASH_BG, fg=COLOR_GOLD, bold=True, fs=10)
+        _col_widths(svc, ss.id, ws.id, [150, 120, 120, 80, 120, 120, 80])
+        _flush(svc, ss.id)
+
+    tdl = summaries.get("TDL", {})
+    tds = summaries.get("TDS", {})
+    ws.append_row([
+        now_jst.strftime("%Y-%m-%d %H:%M"),
+        tdl.get("avg_wait", ""),  tdl.get("crowd", ""), tdl.get("open_count", ""),
+        tds.get("avg_wait", ""),  tds.get("crowd", ""), tds.get("open_count", ""),
+    ], value_input_option="USER_ENTERED")
+    print(f"  サマリー: 1行追記（TDL {tdl.get('avg_wait','-')}分 / TDS {tds.get('avg_wait','-')}分）")
+
+
+# ══════════════════════════════════════════════════════
 # アトラクション個別タブ
 # ══════════════════════════════════════════════════════
 def write_attraction_tabs(ss, svc, now_jst, ride_data: dict):
@@ -513,6 +543,8 @@ def main():
             print(f"  ERROR: {e}")
 
     print("\n[Sheets] 書き込み中...")
+    write_summary(ss, svc, now_jst, summaries)
+    time.sleep(1)
     write_attraction_tabs(ss, svc, now_jst, all_ride_info)
     time.sleep(1)
     write_dashboard(ss, svc, now_jst, all_ride_info, summaries)
