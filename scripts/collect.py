@@ -79,6 +79,8 @@ COLOR_LIGHT_GRAY = rgb(240, 240, 248)
 COLOR_GOLD       = rgb(255, 205, 30)
 COLOR_BLUE_BAR   = rgb(30, 120, 255)
 
+_req_buf: list = []   # batchUpdate リクエストを蓄積するバッファ
+
 
 # ══════════════════════════════════════════════════════
 # 認証
@@ -144,11 +146,22 @@ def get_or_create_sheet(ss, title: str, rows=3000, cols=10) -> gspread.Worksheet
 # Sheets API ヘルパー
 # ══════════════════════════════════════════════════════
 def _exec(svc, ss_id, reqs):
-    if reqs:
+    """リクエストをバッファに積む（実行は _flush で一括）"""
+    _req_buf.extend(reqs)
+
+def _flush(svc, ss_id, chunk=150):
+    """バッファのリクエストをまとめて送信"""
+    global _req_buf
+    if not _req_buf:
+        return
+    for i in range(0, len(_req_buf), chunk):
         svc.spreadsheets().batchUpdate(
             spreadsheetId=ss_id,
-            body={"requests": reqs}
+            body={"requests": _req_buf[i:i+chunk]}
         ).execute()
+        if i + chunk < len(_req_buf):
+            time.sleep(2)
+    _req_buf = []
 
 def _fmt(svc, ss_id, sid, r1, c1, r2, c2, bg=None, fg=None, bold=None, fs=None):
     fmt   = {}
@@ -292,6 +305,7 @@ def write_attraction_tabs(ss, svc, now_jst, ride_data: dict):
             [now_jst.strftime("%Y-%m-%d %H:%M"), wait, status],
             value_input_option="USER_ENTERED"
         )
+    _flush(svc, ss.id)
     print(f"  個別タブ: {len(ride_data)} シート更新")
 
 
@@ -445,6 +459,7 @@ def write_dashboard(ss, svc, now_jst, ride_data: dict, summaries: dict):
     # ダッシュボードを先頭タブに移動
     _move_front(svc, ss.id, ws.id)
 
+    _flush(svc, ss.id)
     print(f"  ダッシュボード: 更新完了（TDL {len(tdl_rows)}本 / TDS {len(tds_rows)}本）")
 
 
