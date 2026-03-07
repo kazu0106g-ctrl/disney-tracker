@@ -283,6 +283,44 @@ def _add_bar_chart(svc, ss_id, sid,
     }}}])
 
 
+def _add_line_chart(svc, ss_id, sid,
+                    domain_col, series: list,  # [(col, color), ...]
+                    max_row, anchor_row, anchor_col, title=""):
+    """折れ線グラフを追加（series は (列インデックス, rgbColor) のリスト）"""
+    src = lambda col: [{
+        "sheetId": sid,
+        "startRowIndex": 0, "endRowIndex": max_row,
+        "startColumnIndex": col, "endColumnIndex": col + 1,
+    }]
+    _exec(svc, ss_id, [{"addChart": {"chart": {
+        "spec": {
+            "title": title,
+            "titleTextFormat": {"bold": True, "fontSize": 13},
+            "basicChart": {
+                "chartType": "LINE",
+                "legendPosition": "BOTTOM_LEGEND",
+                "headerCount": 1,
+                "axis": [
+                    {"position": "BOTTOM_AXIS", "title": ""},
+                    {"position": "LEFT_AXIS",   "title": "待ち時間（分）"},
+                ],
+                "domains": [{"domain": {"sourceRange": {"sources": src(domain_col)}}}],
+                "series": [
+                    {"series": {"sourceRange": {"sources": src(col)}},
+                     "targetAxis": "LEFT_AXIS",
+                     "colorStyle": {"rgbColor": color}}
+                    for col, color in series
+                ],
+            }
+        },
+        "position": {"overlayPosition": {
+            "anchorCell": {"sheetId": sid,
+                           "rowIndex": anchor_row, "columnIndex": anchor_col},
+            "widthPixels": 720, "heightPixels": 420,
+        }}
+    }}}])
+
+
 # ══════════════════════════════════════════════════════
 # サマリー（日次混雑記録）
 # ══════════════════════════════════════════════════════
@@ -293,6 +331,16 @@ SUMMARY_HEADERS = [
     "TDS平均待ち(分)", "TDS推定入場者数", "TDS運営中",
 ]
 
+def _sheet_has_charts(svc, ss_id, sid) -> bool:
+    meta = svc.spreadsheets().get(
+        spreadsheetId=ss_id,
+        fields="sheets(properties(sheetId),charts)"
+    ).execute()
+    for sh in meta.get("sheets", []):
+        if sh["properties"]["sheetId"] == sid:
+            return bool(sh.get("charts"))
+    return False
+
 def write_summary(ss, svc, now_jst, summaries: dict):
     ws = get_or_create_sheet(ss, SUMMARY_SHEET, rows=5000, cols=8)
     first = ws.row_values(1)
@@ -302,6 +350,16 @@ def write_summary(ss, svc, now_jst, summaries: dict):
              bg=COLOR_DASH_BG, fg=COLOR_GOLD, bold=True, fs=10)
         _col_widths(svc, ss.id, ws.id, [150, 120, 120, 80, 120, 120, 80])
         _flush(svc, ss.id)
+
+    if not _sheet_has_charts(svc, ss.id, ws.id):
+        _add_line_chart(svc, ss.id, ws.id,
+                        domain_col=0,
+                        series=[(1, COLOR_TDL_HEADER), (4, COLOR_TDS_HEADER)],
+                        max_row=5000,
+                        anchor_row=0, anchor_col=8,
+                        title="TDL / TDS 平均待ち時間の推移（分）")
+        _flush(svc, ss.id)
+        print("  サマリー: グラフを作成")
 
     tdl = summaries.get("TDL", {})
     tds = summaries.get("TDS", {})
