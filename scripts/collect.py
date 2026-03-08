@@ -332,14 +332,23 @@ SUMMARY_HEADERS = [
 ]
 
 def _sheet_has_charts(svc, ss_id, sid) -> bool:
-    meta = svc.spreadsheets().get(
-        spreadsheetId=ss_id,
-        fields="sheets(properties(sheetId),charts)"
-    ).execute()
-    for sh in meta.get("sheets", []):
-        if sh["properties"]["sheetId"] == sid:
-            return bool(sh.get("charts"))
-    return False
+    for attempt in range(3):
+        try:
+            meta = svc.spreadsheets().get(
+                spreadsheetId=ss_id,
+                fields="sheets(properties(sheetId),charts)"
+            ).execute()
+            for sh in meta.get("sheets", []):
+                if sh["properties"]["sheetId"] == sid:
+                    return bool(sh.get("charts"))
+            return False
+        except Exception as e:
+            if attempt < 2:
+                print(f"  _sheet_has_charts retry ({attempt+1}): {e}")
+                time.sleep(5)
+            else:
+                print(f"  _sheet_has_charts failed, skip chart check: {e}")
+                return True  # 失敗時はグラフ作成をスキップ
 
 def write_summary(ss, svc, now_jst, summaries: dict):
     ws = get_or_create_sheet(ss, SUMMARY_SHEET, rows=5000, cols=8)
