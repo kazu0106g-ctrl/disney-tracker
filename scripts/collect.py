@@ -354,7 +354,7 @@ def write_summary(ss, svc, now_jst, summaries: dict):
     ws = get_or_create_sheet(ss, SUMMARY_SHEET, rows=5000, cols=8)
     first = ws.row_values(1)
     if first != SUMMARY_HEADERS:
-        ws.update("A1:G1", [SUMMARY_HEADERS])
+        ws.update(values=[SUMMARY_HEADERS], range_name="A1:G1")
         _fmt(svc, ss.id, ws.id, 0, 0, 1, 7,
              bg=COLOR_DASH_BG, fg=COLOR_GOLD, bold=True, fs=10)
         _col_widths(svc, ss.id, ws.id, [150, 120, 120, 80, 120, 120, 80])
@@ -389,7 +389,7 @@ def write_attraction_tabs(ss, svc, now_jst, ride_data: dict):
         ws = get_or_create_sheet(ss, name, rows=3000, cols=5)
         first = ws.row_values(1)
         if first != HEADERS:
-            ws.update("A1:C1", [HEADERS])
+            ws.update(values=[HEADERS], range_name="A1:C1")
             color = COLOR_TDL_HEADER if info["park"] == "TDL" else COLOR_TDS_HEADER
             _fmt(svc, ss.id, ws.id, 0, 0, 1, 3,
                  bg=color, fg=COLOR_WHITE, bold=True, fs=11)
@@ -484,7 +484,7 @@ def write_dashboard(ss, svc, now_jst, ride_data: dict, summaries: dict):
     tbl_data_end = row
 
     # まとめて書き込み
-    ws.update("A1", values, value_input_option="USER_ENTERED")
+    ws.update(values=values, range_name="A1", value_input_option="USER_ENTERED")
 
     # ── フォーマット適用 ──────────────────────────────
     cur = 0
@@ -564,7 +564,7 @@ def write_dashboard(ss, svc, now_jst, ride_data: dict, summaries: dict):
 # メイン
 # ══════════════════════════════════════════════════════
 def main():
-    now_jst = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
+    now_jst = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
     print(f"=== Disney Tracker v2  {now_jst.strftime('%Y-%m-%d %H:%M')} JST ===")
 
     gc, svc = get_clients()
