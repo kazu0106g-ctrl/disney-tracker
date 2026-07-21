@@ -50,6 +50,15 @@ TDS_KEY_RIDES = [
     "Rapunzel's Lantern Festival",
 ]
 
+RIDE_NAME_ALIASES = {
+    "Beauty and the Beast: Enchanted Tale": ["Enchanted Tale of Beauty and the Beast"],
+    "Baymax's Happy Ride": ["The Happy Ride with Baymax"],
+    "Indiana Jones Adventure: Temple of the Crystal Skull": [
+        "Indiana Jones Adventure®: Temple of the Crystal Skull",
+    ],
+    "Frozen Ever After": ["Anna and Elsa's Frozen Journey"],
+}
+
 PARKS = {"TDL": 274, "TDS": 275}
 
 CROWD_ESTIMATE = [
@@ -124,6 +133,13 @@ def flatten_rides(data: dict) -> dict:
             "land":      "—",
         }
     return result
+
+def resolve_ride(all_rides: dict, ride_name: str):
+    for source_name in [ride_name, *RIDE_NAME_ALIASES.get(ride_name, [])]:
+        info = all_rides.get(source_name)
+        if info:
+            return info
+    return None
 
 def estimate_crowd(avg_wait: float) -> str:
     for threshold, label in CROWD_ESTIMATE:
@@ -236,6 +252,12 @@ def _delete_charts(svc, ss_id, sid):
             _exec(svc, ss_id, reqs)
     except Exception as e:
         print(f"  chart cleanup warn: {e}")
+
+def _quote_sheet_name(title: str) -> str:
+    return "'" + title.replace("'", "''") + "'"
+
+def _record_count_formula(sheet_name: str) -> str:
+    return f"=MAX(0,COUNTA({_quote_sheet_name(sheet_name)}!A:A)-1)"
 
 def _add_bar_chart(svc, ss_id, sid,
                    domain_r1, domain_r2,   # アトラ名の行範囲
@@ -460,16 +482,9 @@ def write_dashboard(ss, svc, now_jst, ride_data: dict, summaries: dict):
     tdl_rows, tds_rows = [], []
 
     for name, info in ride_data.items():
-        try:
-            ride_ws  = ss.worksheet(name)
-            # 実データ行 = row_count はシートの行上限なので値で取得
-            all_vals = ride_ws.col_values(1)
-            log_cnt  = max(0, len(all_vals) - 1)   # ヘッダー1行除く
-        except Exception:
-            log_cnt = 0
-
         status = "🟢 運営中" if info["is_open"] else "🔴 休止中"
         wait   = info["wait_time"] if info["is_open"] and info["wait_time"] > 0 else "—"
+        log_cnt = _record_count_formula(name)
         entry  = [info["park"], name, wait, status, log_cnt]
         if info["park"] == "TDL":
             tdl_rows.append(entry)
@@ -582,7 +597,7 @@ def main():
 
             filtered = {}
             for ride_name in key_rides:
-                info = all_rides.get(ride_name)
+                info = resolve_ride(all_rides, ride_name)
                 filtered[ride_name] = ({**info, "park": park_label} if info
                                        else {"park": park_label, "is_open": False,
                                              "wait_time": 0, "land": "—"})
