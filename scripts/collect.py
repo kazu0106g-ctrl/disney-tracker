@@ -575,6 +575,24 @@ def write_dashboard(ss, svc, now_jst, ride_data: dict, summaries: dict):
     print(f"  ダッシュボード: 更新完了（TDL {len(tdl_rows)}本 / TDS {len(tds_rows)}本）")
 
 
+def open_spreadsheet_with_retry(gc, spreadsheet_id: str, attempts: int = 5):
+    transient_markers = ("[429]", "[500]", "[502]", "[503]", "[504]")
+
+    for attempt in range(1, attempts + 1):
+        try:
+            return gc.open_by_key(spreadsheet_id)
+        except gspread.exceptions.APIError as exc:
+            if not any(marker in str(exc) for marker in transient_markers) or attempt == attempts:
+                raise
+
+            wait_seconds = min(10 * attempt, 60)
+            print(
+                f"  Google Sheets open retry in {wait_seconds}s "
+                f"({attempt}/{attempts}): {exc}"
+            )
+            time.sleep(wait_seconds)
+
+
 # ══════════════════════════════════════════════════════
 # メイン
 # ══════════════════════════════════════════════════════
@@ -583,7 +601,7 @@ def main():
     print(f"=== Disney Tracker v2  {now_jst.strftime('%Y-%m-%d %H:%M')} JST ===")
 
     gc, svc = get_clients()
-    ss = gc.open_by_key(SPREADSHEET_ID)
+    ss = open_spreadsheet_with_retry(gc, SPREADSHEET_ID)
 
     all_ride_info: dict = {}
     summaries:     dict = {}
